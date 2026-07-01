@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { FaInstagram, FaFacebookF, FaLinkedinIn, FaWhatsapp } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle, AlertCircle } from 'lucide-react';
+import { supabase } from '../../config/supabase';
 import { siteConfig } from '../../config';
 import './Contact.css';
 
@@ -14,6 +17,18 @@ const Contact = () => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [toast, setToast] = useState({
+    show: false,
+    message: '',
+    type: 'success'
+  });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 5000);
+  };
 
   const validate = () => {
     let tempErrors = {};
@@ -33,44 +48,126 @@ const Contact = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validate()) {
-      setIsSubmitting(true);
-      
+    if (!validate()) {
+      showToast("Please check the form for validation errors.", "error");
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      // 1. Save submission to Supabase
+      const { data, error: dbError } = await supabase
+        .from('inquiries')
+        .insert([
+          {
+            full_name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            service: formData.service,
+            message: formData.message,
+            created_at: new Date().toISOString()
+          }
+        ]);
+
+      if (dbError) throw dbError;
+
+      // 2. Send email notification using EmailJS
       try {
-        const response = await fetch(`https://formsubmit.co/ajax/${siteConfig.contact.email}`, {
+        const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+        const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+        const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+
+        if (!serviceId || !templateId || !publicKey) {
+          throw new Error("EmailJS environment variables are missing");
+        }
+
+        const emailResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
+          headers: {
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            ...formData,
-            _subject: `New Enquiry from ${formData.name}`,
-            _template: 'table'
+            service_id: serviceId,
+            template_id: templateId,
+            user_id: publicKey,
+            template_params: {
+              from_name: formData.name,
+              from_email: formData.email,
+              phone_number: formData.phone,
+              service_interested: formData.service,
+              message: formData.message,
+              full_name: formData.name,
+              email: formData.email,
+              phone: formData.phone,
+              service: formData.service
+            }
           })
         });
 
-        if (response.ok) {
-          setIsSuccess(true);
-          setFormData({ name: '', email: '', phone: '', service: '', message: '' });
-        } else {
-          throw new Error('Network response was not ok');
+        if (!emailResponse.ok) {
+          const errText = await emailResponse.text();
+          throw new Error(errText || 'Failed to send email notification');
         }
-      } catch (err) {
-        console.error("Submission failed, using mailto fallback", err);
-        // Fallback for formsubmit failure
-        const fallbackMessage = `Hi! I'm interested in an Enquiry.%0A%0AName: ${formData.name}%0AEmail: ${formData.email}%0APhone: ${formData.phone}%0AService: ${formData.service}%0AMessage: ${formData.message}`;
-        window.location.href = `mailto:${siteConfig.contact.email}?subject=Enquiry from ${formData.name}&body=${fallbackMessage}`;
-        setIsSuccess(true);
-        setFormData({ name: '', email: '', phone: '', service: '', message: '' });
-      } finally {
-        setIsSubmitting(false);
+
+        showToast("Enquiry submitted successfully!", "success");
+      } catch (emailErr) {
+        console.error("EmailJS notification failed:", emailErr);
+        // Saved in Supabase successfully, but EmailJS failed
+        showToast("Enquiry saved, but email notification failed to send.", "warning");
       }
+
+      setIsSuccess(true);
+      setFormData({ name: '', email: '', phone: '', service: '', message: '' });
+    } catch (dbErr) {
+      console.error("Supabase submission failed:", dbErr);
+      showToast(dbErr.message || "Failed to submit enquiry. Please try again.", "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <section className="contact-section" id="contact">
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            style={{
+              position: 'fixed',
+              top: '24px',
+              right: '24px',
+              zIndex: 99999,
+              padding: '1rem 1.5rem',
+              borderRadius: '12px',
+              background: 'rgba(255, 255, 255, 0.85)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: toast.type === 'success' 
+                ? '1px solid rgba(74, 222, 128, 0.3)' 
+                : toast.type === 'warning'
+                ? '1px solid rgba(234, 179, 8, 0.3)'
+                : '1px solid rgba(139, 0, 0, 0.3)',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              color: 'var(--text-primary)',
+              maxWidth: '350px'
+            }}
+          >
+            {toast.type === 'success' && <CheckCircle size={18} style={{ color: '#22c55e', flexShrink: 0 }} />}
+            {toast.type === 'warning' && <AlertCircle size={18} style={{ color: '#eab308', flexShrink: 0 }} />}
+            {toast.type === 'error' && <AlertCircle size={18} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />}
+            <span style={{ fontSize: '0.85rem', fontWeight: 500, lineHeight: 1.4 }}>
+              {toast.message}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="container contact-container">
         
         <div className="contact-info">

@@ -10,11 +10,23 @@ import Contact from './components/Contact/Contact';
 import Footer from './components/Footer/Footer';
 import CartDrawer from './components/CartDrawer/CartDrawer';
 
+// Authentication
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicOnlyRoute from './components/PublicOnlyRoute';
+import SignIn from './pages/Auth/SignIn';
+import SignUp from './pages/Auth/SignUp';
+import ForgotPassword from './pages/Auth/ForgotPassword';
+import Dashboard from './pages/Dashboard/Dashboard';
+
+
 const ScrollToTop = () => {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (!hash) {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, hash]);
   return null;
 };
 
@@ -55,33 +67,60 @@ function App() {
   };
 
   return (
-    <Router>
-      <ScrollToTop />
-      <div className="app-container">
-        <Navbar cartCount={cart.reduce((s, i) => s + i.quantity, 0)} onOpenCart={() => setCartOpen(true)} />
-        <main>
-          <Routes>
-            <Route path="/" element={<Home addToCart={addToCart} />} />
-            <Route path="/founder" element={<Founder />} />
-            <Route path="/co-founder" element={<CoFounder />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/terms-of-service" element={<TermsOfService />} />
-            {/* Standalone Contact Page containing only the contact form */}
-            <Route path="/contact" element={<Contact />} />
-          </Routes>
-        </main>
-        <Footer />
-        
-        <CartDrawer 
-          isOpen={cartOpen} 
-          onClose={() => setCartOpen(false)} 
-          cart={cart}
-          updateQuantity={updateQuantity}
-          removeFromCart={removeFromCart}
-        />
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <ScrollToTop />
+        <div className="app-container">
+          <Navbar cartCount={cart.reduce((s, i) => s + i.quantity, 0)} onOpenCart={() => setCartOpen(true)} />
+          <main>
+            <Routes>
+              <Route path="/" element={<Home addToCart={addToCart} />} />
+              <Route path="/founder" element={<Founder />} />
+              <Route path="/co-founder" element={<CoFounder />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms-of-service" element={<TermsOfService />} />
+              {/* Standalone Contact Page containing only the contact form */}
+              <Route path="/contact" element={<Contact />} />
+              
+              {/* Authentication Routes */}
+              <Route path="/signin" element={
+                <PublicOnlyRoute>
+                  <SignIn />
+                </PublicOnlyRoute>
+              } />
+              <Route path="/signup" element={
+                <PublicOnlyRoute>
+                  <SignUp />
+                </PublicOnlyRoute>
+              } />
+              <Route path="/forgot-password" element={
+                <PublicOnlyRoute>
+                  <ForgotPassword />
+                </PublicOnlyRoute>
+              } />
+              
+              {/* Protected Routes */}
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+            </Routes>
+          </main>
+          <Footer />
+          
+          <CartDrawer 
+            isOpen={cartOpen} 
+            onClose={() => setCartOpen(false)} 
+            cart={cart}
+            updateQuantity={updateQuantity}
+            removeFromCart={removeFromCart}
+          />
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 
 export default App;
+

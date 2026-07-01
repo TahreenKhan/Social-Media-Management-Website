@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ShoppingCart, User, LogOut, LayoutDashboard } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { HashLink as Link } from 'react-router-hash-link';
 import { Link as RouterLink } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 import './Navbar.css';
 
 const Navbar = ({ cartCount = 0, onOpenCart }) => {
   const [scrolled, setScrolled] = useState(false);
+  const { user, signOut } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = React.useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
 
   useEffect(() => {
     const handleScroll = () => {
@@ -68,7 +83,63 @@ const Navbar = ({ cartCount = 0, onOpenCart }) => {
               </span>
             )}
           </button>
-          <Link smooth to="/#build" className="btn btn-primary">Build My Engine</Link>
+          
+          {user ? (
+            <div className="nav-profile-wrapper" ref={dropdownRef}>
+              <button 
+                className="nav-avatar-btn" 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                aria-haspopup="true"
+                aria-expanded={dropdownOpen}
+                aria-label="User Profile Menu"
+              >
+                <img 
+                  className="nav-avatar-img" 
+                  src={user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${user.email}`} 
+                  alt={user.user_metadata?.full_name} 
+                />
+              </button>
+              
+              <AnimatePresence>
+                {dropdownOpen && (
+                  <motion.div 
+                    className="nav-profile-dropdown"
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="dropdown-header">
+                      <div className="dropdown-user-name">{user.user_metadata?.full_name || 'Creative Partner'}</div>
+                      <div className="dropdown-user-email">{user.email}</div>
+                    </div>
+                    <div className="dropdown-links">
+                      <RouterLink to="/dashboard" className="dropdown-link" onClick={() => setDropdownOpen(false)}>
+                        <LayoutDashboard size={14} />
+                        Dashboard
+                      </RouterLink>
+                    </div>
+                    <div className="dropdown-divider"></div>
+                    <button 
+                      className="dropdown-logout-btn" 
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        signOut();
+                      }}
+                    >
+                      <LogOut size={14} />
+                      Sign Out
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <>
+              <RouterLink to="/signin" className="nav-link" style={{ textTransform: 'uppercase', fontSize: '0.85rem' }}>Sign In</RouterLink>
+              <Link smooth to="/#build" className="btn btn-primary">Build My Engine</Link>
+            </>
+          )}
         </div>
       </div>
     </motion.nav>
